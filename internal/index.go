@@ -113,7 +113,9 @@ func NewIndex(config Config) (*Index, error) {
 	}
 
 	if len(segmentsToLoad) == 0 {
-		return i, i.Rotate()
+		if err = i.Rotate(); err != nil {
+			return nil, err
+		}
 	}
 
 	i.measureUsageTimer = time.NewTicker(10 * time.Second)
