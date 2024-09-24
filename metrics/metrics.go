@@ -61,6 +61,8 @@ func (d *Delegates) Dispatch(kind metrics.MetricKind, value float64) {
 		d.Main.IndexSegmentsCount(value)
 	case metrics.CommonDataSegmentsCount:
 		d.Main.DataSegmentsCount(value)
+	case metrics.CommonRecordsCount:
+		d.Main.RecordsCount(value)
 	case metrics.IndexAppendLatency:
 		d.Index.AppendLatency(value)
 	case metrics.IndexAppendCalls:
@@ -121,6 +123,7 @@ type MainInstrumentationDelegate interface {
 	TotalDataSize(float64)
 	IndexSegmentsCount(float64)
 	DataSegmentsCount(float64)
+	RecordsCount(float64)
 }
 
 type IndexInstrumentationDelegate interface {

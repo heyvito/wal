@@ -430,10 +430,16 @@ loop:
 			}
 		}
 
+		totalRecords := int64(0)
+		for _, seg := range i.Segments.Range() {
+			totalRecords += seg.RecordsCount.Load()
+		}
+
 		metrics.Simple(metrics.CommonTotalIndexSize, float64(totalIndexSize))
 		metrics.Simple(metrics.CommonTotalDataSize, float64(totalDataSize))
 		metrics.Simple(metrics.CommonIndexSegmentsCount, float64(indexFiles))
 		metrics.Simple(metrics.CommonDataSegmentsCount, float64(dataFiles))
-		i.log.Debug("Obtained usage metrics", "total_index_size", totalIndexSize, "total_data_size", totalDataSize, "index_files_count", indexFiles, "data_files_count", dataFiles)
+		metrics.Simple(metrics.CommonRecordsCount, float64(totalRecords))
+		i.log.Debug("Obtained usage metrics", "total_index_size", totalIndexSize, "total_data_size", totalDataSize, "index_files_count", indexFiles, "data_files_count", dataFiles, "total_records", totalRecords)
 	}
 }

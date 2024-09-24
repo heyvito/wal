@@ -29,6 +29,7 @@ const (
 	CommonTotalDataSize
 	CommonIndexSegmentsCount
 	CommonDataSegmentsCount
+	CommonRecordsCount
 
 	IndexAppendLatency
 	IndexAppendCalls
