@@ -116,7 +116,7 @@ func NewIndex(config Config) (*Index, error) {
 		return i, i.Rotate()
 	}
 
-	i.measureUsageTimer = time.NewTicker(1 * time.Second)
+	i.measureUsageTimer = time.NewTicker(10 * time.Second)
 	go i.measureUsage()
 	return i, nil
 }
