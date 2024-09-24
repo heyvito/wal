@@ -41,6 +41,7 @@ type delegate interface {
 }
 
 func Dispatch(del delegate) {
+	dispatching.Store(true)
 	for msg := range metricsCh {
 		del.Dispatch(msg.Kind, msg.Value)
 		readingsPool.Put(msg)
