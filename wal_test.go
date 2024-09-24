@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -514,4 +515,52 @@ func TestWALLoopingCursor(t *testing.T) {
 	}
 
 	assert.Equal(t, 899, objsRead)
+}
+
+// TestWALOperationPartialVacuum tests if the WAL continues operating normally
+// after a partial vacuum operation
+func TestWALOperationPartialVacuum(t *testing.T) {
+	conf := Config{
+		DataSegmentSize:  64,
+		IndexSegmentSize: 92,
+		WorkDir:          t.TempDir(),
+		Logger:           stdlog.NewStd(os.Stdout),
+	}
+	w, err := New(conf)
+	require.NoError(t, err)
+
+	assert.True(t, w.IsEmpty(), "expected new WAL to be empty")
+
+	for i := range 1000 {
+		err = w.WriteObject([]byte("object " + strconv.Itoa(i)))
+		require.NoError(t, err)
+	}
+
+	err = w.VacuumRecords(20, true)
+	require.NoError(t, err)
+
+	err = w.VacuumRecords(30, true)
+	require.NoError(t, err)
+
+	err = w.VacuumRecords(50, true)
+	require.NoError(t, err)
+
+	err = w.VacuumRecords(100, true)
+	require.NoError(t, err)
+
+	assert.Equal(t, int64(999), w.CurrentRecordID())
+
+	err = w.Close()
+	require.NoError(t, err)
+
+	w, err = New(conf)
+	require.NoError(t, err)
+
+	err = w.VacuumRecords(500, true)
+	require.NoError(t, err)
+
+	assert.Equal(t, int64(999), w.CurrentRecordID())
+
+	err = w.Close()
+	require.NoError(t, err)
 }

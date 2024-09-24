@@ -386,7 +386,7 @@ func (i *Index) VacuumObjects(id int64, inclusive bool) error {
 		i.CurrentSegment, _ = i.Segments.Load(i.MaxSegment.Load())
 	}
 
-	if rec := i.CurrentSegment.RecordsCount.Load(); rec == 0 {
+	if rec := i.CurrentSegment.UpperRecord.Load(); rec == 0 {
 		i.MaxRecord.Store(-1)
 	} else {
 		i.MaxRecord.Store(rec)
