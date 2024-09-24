@@ -432,5 +432,6 @@ loop:
 		metrics.Simple(metrics.CommonTotalDataSize, float64(totalDataSize))
 		metrics.Simple(metrics.CommonIndexSegmentsCount, float64(indexFiles))
 		metrics.Simple(metrics.CommonDataSegmentsCount, float64(dataFiles))
+		i.log.Debug("Obtained usage metrics", "total_index_size", totalIndexSize, "total_data_size", totalDataSize, "index_files_count", indexFiles, "data_files_count", dataFiles)
 	}
 }
