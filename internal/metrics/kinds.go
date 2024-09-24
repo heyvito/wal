@@ -1,0 +1,51 @@
+package metrics
+
+type MetricKind int
+
+const (
+	CommonWriteObjectCalls MetricKind = iota
+	CommonWriteObjectLatency
+	CommonWriteObjectFailures
+
+	CommonReadObjectCalls
+	CommonReadObjectLatency
+	CommonReadObjectFailures
+
+	CommonIndexInitializationTiming
+	CommonIndexInitializationFailures
+
+	CommonCloseIndexFailures
+	CommonCloseIndexTiming
+
+	CommonDataManagerInitializationTiming
+	CommonDataManagerInitializationFailures
+
+	CommonCloseDataManagerTiming
+	CommonCloseDataManagerFailures
+
+	CommonCountObjectsTiming
+
+	CommonTotalIndexSize
+	CommonTotalDataSize
+	CommonIndexSegmentsCount
+	CommonDataSegmentsCount
+
+	IndexAppendLatency
+	IndexAppendCalls
+	IndexLookupLatency
+	IndexCountObjectsLatency
+	IndexVacuumObjectsLatency
+
+	DataManagerWriteLatency
+	DataManagerWriteCalls
+	DataManagerReadLatency
+	DataManagerReadCalls
+	DataManagerVacuumCalls
+	DataManagerVacuumLatency
+
+	IndexSegmentFlushMetaCalls
+	IndexSegmentFlushMetaLatency
+	IndexSegmentPurgeFromLatency
+	IndexSegmentWriteRecordLatency
+	IndexSegmentLoadRecordLatency
+)

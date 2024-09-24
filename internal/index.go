@@ -2,14 +2,17 @@ package internal
 
 import (
 	"fmt"
+	"github.com/heyvito/wal/internal/metrics"
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/go-stdlog/stdlog"
 	"github.com/heyvito/wal/errors"
@@ -29,6 +32,8 @@ type Index struct {
 	dm *DataManager
 
 	writeMu sync.Mutex
+
+	measureUsageTimer *time.Ticker
 }
 
 func NewIndex(config Config) (*Index, error) {
@@ -46,10 +51,13 @@ func NewIndex(config Config) (*Index, error) {
 
 	log := config.GetLogger().Named("index")
 
+	done := metrics.Measure(metrics.CommonDataManagerInitializationTiming)
 	dm, err := NewDataManager(config)
 	if err != nil {
+		metrics.Simple(metrics.CommonDataManagerInitializationFailures, 0)
 		return nil, fmt.Errorf("failed starting data manager: %w", err)
 	}
+	done()
 
 	var segmentsToLoad []int64
 	entries, err := os.ReadDir(wd)
@@ -108,6 +116,8 @@ func NewIndex(config Config) (*Index, error) {
 		return i, i.Rotate()
 	}
 
+	i.measureUsageTimer = time.NewTicker(1 * time.Second)
+	go i.measureUsage()
 	return i, nil
 }
 
@@ -115,11 +125,18 @@ func (i *Index) Close() error {
 	i.writeMu.Lock()
 	defer i.writeMu.Unlock()
 
+	if i.measureUsageTimer != nil {
+		i.measureUsageTimer.Stop()
+	}
+
 	if i.dm != nil {
+		done := metrics.Measure(metrics.CommonCloseDataManagerTiming)
 		if err := i.dm.Close(); err != nil {
+			metrics.Simple(metrics.CommonCloseDataManagerFailures, 0)
 			i.log.Error(err, "Failed closing data manager")
 			return err
 		}
+		done()
 	}
 
 	for id, segment := range i.Segments.Range() {
@@ -161,6 +178,9 @@ func (i *Index) Rotate() error {
 func (i *Index) Append(data []byte, rec *IndexRecord) error {
 	i.writeMu.Lock()
 	defer i.writeMu.Unlock()
+	defer metrics.Measure(metrics.IndexAppendLatency)()
+	metrics.Simple(metrics.IndexAppendCalls, 0)
+
 	if !i.CurrentSegment.FitsRecord() {
 		if err := i.Rotate(); err != nil {
 			return err
@@ -192,6 +212,7 @@ func (i *Index) SegmentForID(id int64) (*IndexSegment, bool) {
 }
 
 func (i *Index) LookupMeta(id int64, rec *IndexRecord) error {
+	defer metrics.Measure(metrics.IndexLookupLatency)()
 	seg, ok := i.SegmentForID(id)
 	if !ok {
 		return errors.NotFound{RecordID: id}
@@ -219,6 +240,7 @@ func (i *Index) IsEmpty() bool {
 }
 
 func (i *Index) CountObjects(id int64, inclusive bool) int64 {
+	defer metrics.Measure(metrics.IndexCountObjectsLatency)()
 	seg, ok := i.SegmentForID(id)
 	if !ok {
 		return 0
@@ -251,6 +273,7 @@ func (i *Index) ReadObjects(id int64, inclusive bool) IndexCursor {
 func (i *Index) VacuumObjects(id int64, inclusive bool) error {
 	i.writeMu.Lock()
 	defer i.writeMu.Unlock()
+	defer metrics.Measure(metrics.IndexVacuumObjectsLatency)()
 
 	if !inclusive {
 		id = id - 1
@@ -370,4 +393,44 @@ func (i *Index) VacuumObjects(id int64, inclusive bool) error {
 	}
 
 	return nil
+}
+
+func (i *Index) measureUsage() {
+	wd := i.Config.GetWorkdir()
+loop:
+	for range i.measureUsageTimer.C {
+		totalIndexSize := int64(0)
+		totalDataSize := int64(0)
+		indexFiles := 0
+		dataFiles := 0
+
+		entries, err := os.ReadDir(wd)
+		if err != nil {
+			i.log.Error(err, "Failed reading directory for usage measurement", "path", wd)
+			continue loop
+		}
+		for _, v := range entries {
+			if v.IsDir() {
+				continue
+			}
+			stat, err := os.Stat(filepath.Join(wd, v.Name()))
+			if err != nil {
+				i.log.Error(err, "Failed calling stat for directory entry", "name", v.Name())
+				continue loop
+			}
+			switch {
+			case strings.HasPrefix(v.Name(), "data"):
+				totalDataSize += stat.Size()
+				dataFiles++
+			case strings.HasPrefix(v.Name(), "index"):
+				totalIndexSize += stat.Size()
+				indexFiles++
+			}
+		}
+
+		metrics.Simple(metrics.CommonTotalIndexSize, float64(totalIndexSize))
+		metrics.Simple(metrics.CommonTotalDataSize, float64(totalDataSize))
+		metrics.Simple(metrics.CommonIndexSegmentsCount, float64(indexFiles))
+		metrics.Simple(metrics.CommonDataSegmentsCount, float64(dataFiles))
+	}
 }

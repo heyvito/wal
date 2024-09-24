@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	errs "errors"
 	"fmt"
+	"github.com/heyvito/wal/internal/metrics"
 	"io"
 	"os"
 	"path/filepath"
@@ -118,9 +119,12 @@ func (w *wal) initialize() error {
 		return errors.CannotAcquireWALLockError{PID: pid}
 	}
 
+	done := metrics.Measure(metrics.CommonIndexInitializationTiming)
 	indexInitStart := time.Now()
 	idx, err := internal.NewIndex(w.config)
+	done()
 	if err != nil {
+		metrics.Simple(metrics.CommonIndexInitializationFailures, 0)
 		w.tearDownLock()
 		w.log.Error(err, "WAL startup failed")
 		return err
@@ -260,19 +264,33 @@ func (w *wal) writePidToLock() (int, error) {
 }
 
 func (w *wal) WriteObject(data []byte) error {
+	metrics.Simple(metrics.CommonWriteObjectCalls, 0)
+	defer metrics.Measure(metrics.CommonWriteObjectLatency)()
 	rec := &internal.IndexRecord{}
-	return w.index.Append(data, rec)
+	err := w.index.Append(data, rec)
+	if err != nil {
+		metrics.Simple(metrics.CommonWriteObjectFailures, 0)
+	}
+	return err
 }
 
 func (w *wal) ReadObject(id int64) (io.Reader, error) {
+	metrics.Simple(metrics.CommonReadObjectCalls, 0)
+	defer metrics.Measure(metrics.CommonReadObjectLatency)()
+
 	rec := &internal.IndexRecord{}
 	if err := w.index.LookupMeta(id, rec); err != nil {
+		metrics.Simple(metrics.CommonReadObjectFailures, 0)
 		return nil, err
 	}
 	if rec.Purged {
 		return nil, errors.NotFound{RecordID: id}
 	}
-	return w.index.ReadRecord(rec)
+	r, err := w.index.ReadRecord(rec)
+	if err != nil {
+		metrics.Simple(metrics.CommonReadObjectFailures, 0)
+	}
+	return r, err
 }
 
 func (w *wal) ReadObjects(id int64, inclusive bool) Cursor {
@@ -292,6 +310,7 @@ func (w *wal) VacuumRecords(id int64, inclusive bool) error {
 }
 
 func (w *wal) CountObjects(id int64, inclusive bool) int64 {
+	defer metrics.Measure(metrics.CommonCountObjectsTiming)()
 	return w.index.CountObjects(id, inclusive)
 }
 

@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"github.com/heyvito/wal/internal/metrics"
 	"io"
 	"os"
 	"slices"
@@ -142,6 +143,9 @@ func (m *DataManager) Write(data []byte, rec *IndexRecord) error {
 	m.writeMu.Lock()
 	defer m.writeMu.Unlock()
 
+	defer metrics.Measure(metrics.DataManagerWriteLatency)()
+	metrics.Simple(metrics.DataManagerWriteCalls, 0)
+
 	if !m.CurrentSegment.Available() {
 		if err := m.Rotate(); err != nil {
 			return err
@@ -173,6 +177,9 @@ func (m *DataManager) Write(data []byte, rec *IndexRecord) error {
 }
 
 func (m *DataManager) Read(rec *IndexRecord) (io.Reader, error) {
+	defer metrics.Measure(metrics.DataManagerReadLatency)()
+	metrics.Simple(metrics.DataManagerReadCalls, 0)
+
 	var readers []io.Reader
 
 	size := rec.Size
@@ -197,6 +204,9 @@ func (m *DataManager) Read(rec *IndexRecord) (io.Reader, error) {
 func (m *DataManager) VacuumDataSegments(idsInUse []int64) error {
 	m.writeMu.Lock()
 	defer m.writeMu.Unlock()
+
+	defer metrics.Measure(metrics.IndexVacuumObjectsLatency)()
+	metrics.Simple(metrics.DataManagerVacuumCalls, 0)
 
 	m.log.Info("Vacuuming data segments", "ids_in_use", idsInUse)
 	defer m.log.Info("Finished vacuuming data segments")

@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"github.com/heyvito/wal/internal/metrics"
 	"os"
 	"path/filepath"
 	"sync"
@@ -96,6 +97,9 @@ func (s *IndexSegment) LoadMetadata() {
 }
 
 func (s *IndexSegment) FlushMetadata() {
+	metrics.Simple(metrics.IndexSegmentFlushMetaCalls, 0)
+	defer metrics.Measure(metrics.IndexSegmentFlushMetaLatency)()
+
 	be.PutUint64(s.Metadata[indexSegmentOffsets.SegmentID:], uint64(s.SegmentID))
 	be.PutUint64(s.Metadata[indexSegmentOffsets.Size:], uint64(s.Size))
 	be.PutUint64(s.Metadata[indexSegmentOffsets.LowerRecord:], uint64(s.LowerRecord.Load()))
@@ -119,6 +123,7 @@ func (s *IndexSegment) ContainsRecord(id int64) bool {
 }
 
 func (s *IndexSegment) LoadRecord(id int64, rec *IndexRecord) bool {
+	defer metrics.Measure(metrics.IndexSegmentLoadRecordLatency)()
 	if !s.ContainsRecord(id) {
 		return false
 	}
@@ -137,6 +142,9 @@ func (s *IndexSegment) FitsRecord() bool {
 func (s *IndexSegment) WriteRecord(rec *IndexRecord) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
+
+	defer metrics.Measure(metrics.IndexSegmentWriteRecordLatency)()
+
 	cur := s.Cursor.Load()
 	rec.Write(s.Records[cur:])
 	if cur == 0 {
@@ -158,6 +166,7 @@ func (s *IndexSegment) Close() error {
 }
 
 func (s *IndexSegment) PurgeFrom(id int64) {
+	defer metrics.Measure(metrics.IndexSegmentPurgeFromLatency)()
 	if !s.FitsRecord() && id == s.UpperRecord.Load() {
 		s.Purged = true
 		s.FlushMetadata()
