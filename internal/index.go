@@ -100,11 +100,12 @@ func NewIndex(config Config) (*Index, error) {
 			log.Error(err, "Failed loading index segment", "id", id)
 			return nil, err
 		}
-		if ms := i.MinSegment.Load(); id > ms || ms == -1 {
+		if ms := i.MinSegment.Load(); id < ms || ms == -1 {
 			i.MinSegment.Store(id)
 		}
 		i.Segments.Store(id, segment)
 		i.LoadedSegments.Add(1)
+		log.Debug("Loaded index segment", "id", segment.SegmentID)
 		if i.CurrentSegment == nil || id > i.CurrentSegment.SegmentID {
 			i.CurrentSegment = segment
 			i.MaxRecord.Store(segment.UpperRecord.Load())
