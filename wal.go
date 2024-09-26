@@ -55,6 +55,10 @@ type WAL interface {
 	// IsEmpty returns whether the WAL contains any items. Returns true in case
 	// no item is currently stored, otherwise returns false.
 	IsEmpty() bool
+
+	// MinimumRecordID returns the minimum record available in the WAL. Returns
+	// -1 in case no record is available.
+	MinimumRecordID() int64
 }
 
 func New(config Config) (WAL, error) {
@@ -320,4 +324,8 @@ func (w *wal) CurrentRecordID() int64 {
 
 func (w *wal) IsEmpty() bool {
 	return w.index.IsEmpty()
+}
+
+func (w *wal) MinimumRecordID() int64 {
+	return w.index.MinimumRecordID()
 }

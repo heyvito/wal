@@ -564,3 +564,39 @@ func TestWALOperationPartialVacuum(t *testing.T) {
 	err = w.Close()
 	require.NoError(t, err)
 }
+
+func TestWALMinimumRecordID(t *testing.T) {
+	conf := Config{
+		DataSegmentSize:  64,
+		IndexSegmentSize: 92,
+		WorkDir:          t.TempDir(),
+		Logger:           stdlog.NewStd(os.Stdout),
+	}
+	w, err := New(conf)
+	require.NoError(t, err)
+
+	assert.True(t, w.IsEmpty(), "expected new WAL to be empty")
+
+	for i := range 1000 {
+		err = w.WriteObject([]byte("object " + strconv.Itoa(i)))
+		require.NoError(t, err)
+	}
+
+	err = w.VacuumRecords(20, true)
+	require.NoError(t, err)
+
+	err = w.VacuumRecords(30, true)
+	require.NoError(t, err)
+
+	err = w.VacuumRecords(50, true)
+	require.NoError(t, err)
+
+	err = w.VacuumRecords(100, true)
+	require.NoError(t, err)
+
+	assert.Equal(t, int64(999), w.CurrentRecordID())
+
+	assert.Equal(t, int64(101), w.MinimumRecordID())
+	err = w.Close()
+	require.NoError(t, err)
+}

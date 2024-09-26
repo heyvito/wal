@@ -21,7 +21,7 @@ import (
 type Index struct {
 	Config         Config
 	Workdir        string
-	MinSegment     int64
+	MinSegment     atomic.Int64
 	MaxSegment     atomic.Int64
 	MaxRecord      atomic.Int64
 	Segments       AtomicMap[int64, *IndexSegment]
@@ -86,11 +86,11 @@ func NewIndex(config Config) (*Index, error) {
 		Config:         config,
 		Workdir:        wd,
 		CurrentSegment: nil,
-		MinSegment:     -1,
 		log:            log,
 		dm:             dm,
 	}
 
+	i.MinSegment.Store(-1)
 	i.MaxSegment.Store(-1)
 
 	for _, id := range segmentsToLoad {
@@ -100,8 +100,8 @@ func NewIndex(config Config) (*Index, error) {
 			log.Error(err, "Failed loading index segment", "id", id)
 			return nil, err
 		}
-		if id > i.MinSegment || i.MinSegment == -1 {
-			i.MinSegment = id
+		if ms := i.MinSegment.Load(); id > ms || ms == -1 {
+			i.MinSegment.Store(id)
 		}
 		i.Segments.Store(id, segment)
 		i.LoadedSegments.Add(1)
@@ -159,7 +159,7 @@ func (i *Index) Rotate() error {
 		if err != nil {
 			return err
 		}
-		i.MinSegment = 0
+		i.MinSegment.Store(0)
 		i.MaxSegment.Store(0)
 		i.Segments.Store(0, seg)
 		i.MaxRecord.Store(-1)
@@ -228,7 +228,7 @@ func (i *Index) ReadRecord(rec *IndexRecord) (io.Reader, error) {
 }
 
 func (i *Index) IsEmpty() bool {
-	if i.MinSegment == 0 && i.MaxSegment.Load() == 0 {
+	if i.MinSegment.Load() == 0 && i.MaxSegment.Load() == 0 {
 		return i.CurrentSegment.RecordsCount.Load() == 0
 	}
 
@@ -382,7 +382,7 @@ func (i *Index) VacuumObjects(id int64, inclusive bool) error {
 		}
 	}
 	i.MaxSegment.Store(maxSeg)
-	i.MinSegment = minSeg
+	i.MinSegment.Store(minSeg)
 
 	if i.CurrentSegment == nil {
 		i.CurrentSegment, _ = i.Segments.Load(i.MaxSegment.Load())
@@ -442,4 +442,16 @@ loop:
 		metrics.Simple(metrics.CommonRecordsCount, float64(totalRecords))
 		i.log.Debug("Obtained usage metrics", "total_index_size", totalIndexSize, "total_data_size", totalDataSize, "index_files_count", indexFiles, "data_files_count", dataFiles, "total_records", totalRecords)
 	}
+}
+
+func (i *Index) MinimumRecordID() int64 {
+	minSeg := i.MinSegment.Load()
+	if minSeg == -1 {
+		return -1
+	}
+	seg, ok := i.Segments.Load(minSeg)
+	if !ok {
+		return -1
+	}
+	return seg.LowerRecord.Load()
 }

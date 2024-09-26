@@ -39,3 +39,7 @@ func SetIndexRecordPurged(b []byte) {
 	flags |= 0x01
 	b[indexRecordOffsets.Flags] = flags
 }
+
+func IsIndexRecordPurged(b []byte) bool {
+	return b[indexRecordOffsets.Flags]&0x01 != 0
+}

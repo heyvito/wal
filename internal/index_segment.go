@@ -193,6 +193,20 @@ func (s *IndexSegment) PurgeFrom(id int64) {
 		s.Purged = true
 		s.FlushMetadata()
 	}
+
+	if s.Purged {
+		s.LowerRecord.Store(-1)
+	} else {
+		cur = 0
+		for i := s.LowerRecord.Load(); i <= s.UpperRecord.Load(); i++ {
+			if !IsIndexRecordPurged(s.Records[cur*IndexRecordSize:]) {
+				s.LowerRecord.Store(i)
+				break
+			}
+			cur++
+		}
+	}
+
 }
 
 func (s *IndexSegment) Unlink() error {
