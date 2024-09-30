@@ -14,10 +14,11 @@ import (
 const IndexSegmentMetadataSize = 6*8 + 1
 
 type IndexSegment struct {
-	Path      string
-	File      *os.File
-	SegmentID int64
-	Size      int64
+	Path          string
+	File          *os.File
+	SegmentID     int64
+	Size          int64
+	FirstRecordID int64
 
 	LowerRecord  atomic.Int64
 	UpperRecord  atomic.Int64
@@ -93,7 +94,11 @@ func (s *IndexSegment) LoadMetadata() {
 	s.Cursor.Store(int64(be.Uint64(s.Metadata[indexSegmentOffsets.Cursor:])))
 	flags := s.Metadata[indexSegmentOffsets.Flags]
 	s.Purged = flags&(0x01<<0) != 0
-
+	if s.Cursor.Load() > 0 {
+		rec := &IndexRecord{}
+		rec.Read(s.Records)
+		s.FirstRecordID = rec.RecordID
+	}
 }
 
 func (s *IndexSegment) FlushMetadata() {
@@ -128,7 +133,7 @@ func (s *IndexSegment) LoadRecord(id int64, rec *IndexRecord) bool {
 		return false
 	}
 
-	offset := (id - s.LowerRecord.Load()) * IndexRecordSize
+	offset := (id - s.FirstRecordID) * IndexRecordSize
 	rec.Read(s.Records[offset:])
 	return true
 }
@@ -149,6 +154,7 @@ func (s *IndexSegment) WriteRecord(rec *IndexRecord) {
 	rec.Write(s.Records[cur:])
 	if cur == 0 {
 		s.LowerRecord.Store(rec.RecordID)
+		s.FirstRecordID = rec.RecordID
 	}
 	s.Cursor.Add(IndexRecordSize)
 	s.UpperRecord.Store(rec.RecordID)
@@ -174,7 +180,7 @@ func (s *IndexSegment) PurgeFrom(id int64) {
 	}
 
 	lr := s.LowerRecord.Load()
-	cur := 0
+	cur := lr - s.FirstRecordID
 	for i := lr; i <= id; i++ {
 		SetIndexRecordPurged(s.Records[cur*IndexRecordSize:])
 		cur++

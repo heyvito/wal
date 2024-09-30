@@ -319,7 +319,7 @@ func (w *wal) CountObjects(id int64, inclusive bool) int64 {
 }
 
 func (w *wal) CurrentRecordID() int64 {
-	return max(w.index.MaxRecord.Load(), 0)
+	return w.index.MaxRecord.Load()
 }
 
 func (w *wal) IsEmpty() bool {

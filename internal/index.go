@@ -267,6 +267,9 @@ func (i *Index) ReadObjects(id int64, inclusive bool) IndexCursor {
 	if !inclusive {
 		id += 1
 	}
+	if id == -1 {
+		id = 0
+	}
 	return &indexCursor{
 		index: i,
 		wants: id,
